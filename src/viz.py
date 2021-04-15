@@ -20,13 +20,21 @@ def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=Fals
   Returns
     Nothing. Draws on ax.
   """
+  if birdNames == False:
+    assert channels.size == len(data_utils.H36M_NAMES)*3, "channels should have 96 entries, it has %d instead" % channels.size
+    vals = np.reshape( channels, (len(data_utils.H36M_NAMES), -1) )
+    print("Vals : ", vals)
+    I   = np.array([1,2,3,1,7,8,1, 13,14,15,14,18,19,14,26,27])-1 # start points
+    J   = np.array([2,3,4,7,8,9,13,14,15,16,18,19,20,26,27,28])-1 # end points
+    LR  = np.array([1,1,1,0,0,0,0, 0, 0, 0, 0, 0, 0, 1, 1, 1], dtype=bool)
 
-  assert channels.size == len(data_utils.H36M_NAMES)*3, "channels should have 96 entries, it has %d instead" % channels.size
-  vals = np.reshape( channels, (len(data_utils.H36M_NAMES), -1) )
-
-  I   = np.array([1,2,3,1,7,8,1, 13,14,15,14,18,19,14,26,27])-1 # start points
-  J   = np.array([2,3,4,7,8,9,13,14,15,16,18,19,20,26,27,28])-1 # end points
-  LR  = np.array([1,1,1,0,0,0,0, 0, 0, 0, 0, 0, 0, 1, 1, 1], dtype=bool)
+  else:
+    assert channels.size == len(data_utils.BIRD_NAMES) * 3, "channels should have 64 entries, it has %d instead" % channels.size
+    vals = np.reshape(channels, (len(data_utils.BIRD_NAMES), -1))
+    print("Vals : ", vals)
+    I = np.array ([1,2,2,3,4,5,6])-1  # start points
+    J = np.array ([2,3,4,5,6,7,7])-1  # end points
+    LR = np.array([0,1,0,1,0,1,0], dtype=bool)
 
   # Make connection matrix
   for i in np.arange( len(I) ):
@@ -52,6 +60,7 @@ def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=Fals
   ax.get_xaxis().set_ticklabels([])
   ax.get_yaxis().set_ticklabels([])
   ax.set_zticklabels([])
+  ax.set_aspect('equal') # may have issues 
 
   # Get rid of the panes (actually, make them white)
   white = (1.0, 1.0, 1.0, 0.0)
@@ -64,9 +73,9 @@ def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=Fals
   ax.w_yaxis.line.set_color(white)
   ax.w_zaxis.line.set_color(white)
 
-
-def show2Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=False):
-  """Visualize a 2d skeleton
+def show2Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=False, birdNames = False):
+  """
+  Visualize a 2d skeleton
 
   Args
     channels: 64x1 vector. The pose to plot.
@@ -77,13 +86,20 @@ def show2Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=Fals
   Returns
     Nothing. Draws on ax.
   """
-
-  assert channels.size == len(data_utils.H36M_NAMES)*2, "channels should have 64 entries, it has %d instead" % channels.size
-  vals = np.reshape( channels, (len(data_utils.H36M_NAMES), -1) )
-
-  I  = np.array([1,2,3,1,7,8,1, 13,14,14,18,19,14,26,27])-1 # start points
-  J  = np.array([2,3,4,7,8,9,13,14,16,18,19,20,26,27,28])-1 # end points
-  LR = np.array([1,1,1,0,0,0,0, 0, 0, 0, 0, 0, 1, 1, 1], dtype=bool)
+  if birdNames == False:
+    assert channels.size == len(data_utils.H36M_NAMES)*2, "channels should have 64 entries, it has %d instead" % channels.size
+    vals = np.reshape( channels, (len(data_utils.H36M_NAMES), -1) )
+    print(" --------- \n 2D : ", vals)
+    I  = np.array([1,2,3,1,7,8,1, 13,14,14,18,19,14,26,27])-1 # start points
+    J  = np.array([2,3,4,7,8,9,13,14,16,18,19,20,26,27,28])-1 # end points
+    LR = np.array([1,1,1,0,0,0,0, 0, 0, 0, 0, 0, 1, 1, 1], dtype=bool)
+  else:
+    assert channels.size == len(data_utils.BIRD_NAMES) * 2, "channels should have 64 entries, it has %d instead" % channels.size
+    vals = np.reshape(channels, (len(data_utils.BIRD_NAMES), -1))
+    print(" --------- \n 2D : ", vals)
+    I = np.array ([1,2,2,3,4,5,6])-1  # start points
+    J = np.array ([2,3,4,5,6,7,7])-1  # end points
+    LR = np.array([0,1,0,1,0,1,0], dtype=bool)
 
   # Make connection matrix
   for i in np.arange( len(I) ):

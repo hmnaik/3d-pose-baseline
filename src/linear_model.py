@@ -35,6 +35,7 @@ class LinearModel(object):
                learning_rate,
                summaries_dir,
                predict_14=False,
+               birdNames=False,
                dtype=tf.float32):
     """Creates the linear + relu model
 
@@ -55,6 +56,7 @@ class LinearModel(object):
     # hourglass detections). We settled with 16 joints in 2d just to make models
     # compatible (e.g. you can train on ground truth 2d and test on SH detections).
     # This does not seem to have an effect on prediction performance.
+
     self.HUMAN_2D_SIZE = 16 * 2
 
     # In 3d all the predictions are zero-centered around the root (hip) joint, so
@@ -64,6 +66,9 @@ class LinearModel(object):
     # There is also an option to predict only 14 joints, which makes our results
     # directly comparable to those in https://arxiv.org/pdf/1611.09010.pdf
     self.HUMAN_3D_SIZE = 14 * 3 if predict_14 else 16 * 3
+    if birdNames == True:
+      self.HUMAN_2D_SIZE = 12
+      self.HUMAN_3D_SIZE = 18
 
     self.input_size  = self.HUMAN_2D_SIZE
     self.output_size = self.HUMAN_3D_SIZE
@@ -238,7 +243,7 @@ class LinearModel(object):
       outputs = session.run(output_feed, input_feed)
       return outputs[0], outputs[1], outputs[2]  # No gradient norm
 
-  def get_all_batches( self, data_x, data_y, camera_frame, training=True ):
+  def get_all_batches( self, data_x, data_y, camera_frame, training=True , birdNames = False):
     """
     Obtain a list of all the batches, randomly permutted
     Args
@@ -264,10 +269,13 @@ class LinearModel(object):
     # Put all the data into big arrays
     idx = 0
     for key2d in data_x.keys():
-      (subj, b, fname) = key2d
-      # keys should be the same if 3d is in camera coordinates
-      key3d = key2d if (camera_frame) else (subj, b, '{0}.h5'.format(fname.split('.')[0]))
-      key3d = (subj, b, fname[:-3]) if fname.endswith('-sh') and camera_frame else key3d
+      if birdNames == False :
+        (subj, b, fname) = key2d
+        # keys should be the same if 3d is in camera coordinates
+        key3d = key2d if (camera_frame) else (subj, b, '{0}.h5'.format(fname.split('.')[0]))
+        key3d = (subj, b, fname[:-3]) if fname.endswith('-sh') and camera_frame else key3d
+      else:
+        key3d = key2d
 
       n2d, _ = data_x[ key2d ].shape
       encoder_inputs[idx:idx+n2d, :]  = data_x[ key2d ]

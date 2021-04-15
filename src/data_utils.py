@@ -33,6 +33,15 @@ H36M_NAMES[25] = 'RShoulder'
 H36M_NAMES[26] = 'RElbow'
 H36M_NAMES[27] = 'RWrist'
 
+BIRD_NAMES = ['']*7
+BIRD_NAMES[0] = 'head_beak'
+BIRD_NAMES[1] = 'head_nose'
+BIRD_NAMES[2] = 'head_leftEyes'
+BIRD_NAMES[3] = 'head_rightEyes'
+BIRD_NAMES[4] = 'body_leftShoulder'
+BIRD_NAMES[5] = 'body_rightShoulder'
+BIRD_NAMES[6] = 'body_tail'
+
 # Stacked Hourglass produces 16 joints. These are the names.
 SH_NAMES = ['']*16
 SH_NAMES[0]  = 'RFoot'
@@ -131,18 +140,32 @@ def normalization_stats(complete_data, dim, predict_14=False ):
 
   # Encodes which 17 (or 14) 2d-3d pairs we are predicting
   dimensions_to_ignore = []
-  if dim == 2:
-    dimensions_to_use    = np.where(np.array([x != '' and x != 'Neck/Nose' for x in H36M_NAMES]))[0]
-    dimensions_to_use    = np.sort( np.hstack( (dimensions_to_use*2, dimensions_to_use*2+1)))
-    dimensions_to_ignore = np.delete( np.arange(len(H36M_NAMES)*2), dimensions_to_use )
-  else: # dim == 3
-    dimensions_to_use = np.where(np.array([x != '' for x in H36M_NAMES]))[0]
-    dimensions_to_use = np.delete( dimensions_to_use, [0,7,9] if predict_14 else 0 )
+    # todo : Can enter the values for dims manually , datamean and datas std does not change much
+  if birdNames == False:
+	  if dim == 2:
+	    dimensions_to_use    = np.where(np.array([x != '' and x != 'Neck/Nose' for x in H36M_NAMES]))[0]
+	    dimensions_to_use    = np.sort( np.hstack( (dimensions_to_use*2, dimensions_to_use*2+1)))
+	    dimensions_to_ignore = np.delete( np.arange(len(H36M_NAMES)*2), dimensions_to_use )
+	  else: # dim == 3
+	    dimensions_to_use = np.where(np.array([x != '' for x in H36M_NAMES]))[0]
+	    dimensions_to_use = np.delete( dimensions_to_use, [0,7,9] if predict_14 else 0 )
+	
+	    dimensions_to_use = np.sort( np.hstack( (dimensions_to_use*3,
+	                                             dimensions_to_use*3+1,
+	                                             dimensions_to_use*3+2)))
+	    dimensions_to_ignore = np.delete( np.arange(len(H36M_NAMES)*3), dimensions_to_use )
+  else:
+    if dim == 2:
+      dimensions_to_use = list(range(2,len(BIRD_NAMES)*2))
+      dimensions_to_ignore = [0,1]
 
-    dimensions_to_use = np.sort( np.hstack( (dimensions_to_use*3,
-                                             dimensions_to_use*3+1,
-                                             dimensions_to_use*3+2)))
-    dimensions_to_ignore = np.delete( np.arange(len(H36M_NAMES)*3), dimensions_to_use )
+    else : # dim = 3
+      dimensions_to_use = list(range(3, len(BIRD_NAMES) * 3))
+      dimensions_to_ignore = [0, 1, 2]
+    print("data for birds names ")
+
+  # For 2D it is diff and 3D it is diff
+  # dims_to_ignore = [] dimns_to_use = [list of positions 0 to no. of features]
 
   return data_mean, data_std, dimensions_to_ignore, dimensions_to_use
 
@@ -188,7 +211,7 @@ def normalize_data(data, data_mean, data_std, dim_to_use ):
   data_out = {}
 
   for key in data.keys():
-    data[ key ] = data[ key ][ :, dim_to_use ]
+    data[ key ] = data[ key ][ :, dim_to_use ] # select only the dimensions which need the normalization
     mu = data_mean[dim_to_use]
     stddev = data_std[dim_to_use]
     data_out[ key ] = np.divide( (data[key] - mu), stddev )
@@ -278,8 +301,39 @@ def project_to_cameras( poses_set, cams, ncams=4 ):
   return t2d
 
 
-def create_2d_data( actions, data_dir, rcams ):
-  """Creates 2d poses by projecting 3d poses with the corresponding camera
+def read_2d_predictions( actions, data_dir , birdNames = False):
+  """
+  Loads 2d data from precomputed Stacked Hourglass detections
+
+  Args
+    actions: list of strings. Actions to load
+    data_dir: string. Directory where the data can be loaded from
+  Returns
+    train_set: dictionary with loaded 2d stacked hourglass detections for training
+    test_set: dictionary with loaded 2d stacked hourglass detections for testing
+    data_mean: vector with the mean of the 2d training data
+    data_std: vector with the standard deviation of the 2d training data
+    dim_to_ignore: list with the dimensions to not predict
+    dim_to_use: list with the dimensions to predict
+  """
+  TRAIN_SUBJECTS = [1]
+  TEST_SUBJECTS = [9]
+
+  train_set = load_stacked_hourglass( data_dir, TRAIN_SUBJECTS, actions)
+  test_set  = load_stacked_hourglass( data_dir, TEST_SUBJECTS,  actions)
+
+  complete_train = copy.deepcopy( np.vstack( train_set.values() ))
+  data_mean, data_std,  dim_to_ignore, dim_to_use = normalization_stats( complete_train, dim=2 )
+
+  train_set = normalize_data( train_set, data_mean, data_std, dim_to_use )
+  test_set  = normalize_data( test_set,  data_mean, data_std, dim_to_use )
+
+  return train_set, test_set, data_mean, data_std, dim_to_ignore, dim_to_use
+
+
+def create_2d_data( actions, data_dir, rcams , birdNames = False):
+  """
+  Creates 2d poses by projecting 3d poses with the corresponding camera
   parameters. Also normalizes the 2d poses
 
   Args
@@ -294,18 +348,23 @@ def create_2d_data( actions, data_dir, rcams ):
     dim_to_ignore: list with the dimensions to not predict
     dim_to_use: list with the dimensions to predict
   """
+  # Todo : change number of subjects #HMN
+  TRAIN_SUBJECTS = [1]
+  TEST_SUBJECTS = [9]
 
   # Load 3d data
-  train_set = load_data( data_dir, TRAIN_SUBJECTS, actions, dim=3 )
-  test_set  = load_data( data_dir, TEST_SUBJECTS,  actions, dim=3 )
+  if birdNames == False:
+    train_set = load_data( data_dir, TRAIN_SUBJECTS, actions, dim=3 )
+    test_set  = load_data( data_dir, TEST_SUBJECTS,  actions, dim=3 )
 
-  # Create 2d data by projecting with camera parameters
-  train_set = project_to_cameras( train_set, rcams )
-  test_set  = project_to_cameras( test_set, rcams )
+    train_set = project_to_cameras( train_set, rcams )
+    test_set  = project_to_cameras( test_set, rcams )
+  else :
+    train_set, test_set = readDataset.getData("./testDatasetBirdTracking/*", dims= 2)
 
   # Compute normalization statistics.
   complete_train = copy.deepcopy( np.vstack( list(train_set.values()) ))
-  data_mean, data_std, dim_to_ignore, dim_to_use = normalization_stats( complete_train, dim=2 )
+  data_mean, data_std, dim_to_ignore, dim_to_use = normalization_stats( complete_train, dim=2 , birdNames= birdNames)
 
   # Divide every dimension independently
   train_set = normalize_data( train_set, data_mean, data_std, dim_to_use )
@@ -314,7 +373,7 @@ def create_2d_data( actions, data_dir, rcams ):
   return train_set, test_set, data_mean, data_std, dim_to_ignore, dim_to_use
 
 
-def read_3d_data( actions, data_dir, camera_frame, rcams, predict_14=False ):
+def read_3d_data( actions, data_dir, camera_frame, rcams, predict_14=False , birdNames = False):
   """Loads 3d poses, zero-centres and normalizes them
 
   Args
@@ -334,30 +393,43 @@ def read_3d_data( actions, data_dir, camera_frame, rcams, predict_14=False ):
     test_root_positions: dictionary with the 3d positions of the root in test
   """
   # Load 3d data
+
+  TRAIN_SUBJECTS = [1]
+  TEST_SUBJECTS = [9]
+
   train_set = load_data( data_dir, TRAIN_SUBJECTS, actions, dim=3 )
+  # train_set = dict {Subject, Action, Dataset}
   test_set  = load_data( data_dir, TEST_SUBJECTS,  actions, dim=3 )
+
+  if birdNames:
+    train_set, test_set = readDataset.getData("./testDatasetBirdTracking/*", dims= 3)
+
 
   if camera_frame:
     train_set = transform_world_to_camera( train_set, rcams )
     test_set  = transform_world_to_camera( test_set, rcams )
 
   # Apply 3d post-processing (centering around root)
-  train_set, train_root_positions = postprocess_3d( train_set )
-  test_set,  test_root_positions  = postprocess_3d( test_set )
+  # Todo : Change the number of fetures for cacluation of root and eliminate the first row
+  train_set, train_root_positions = postprocess_3d( train_set, birdNames )
+  test_set,  test_root_positions  = postprocess_3d( test_set, birdNames)
 
   # Compute normalization statistics
   complete_train = copy.deepcopy( np.vstack( list(train_set.values()) ))
-  data_mean, data_std, dim_to_ignore, dim_to_use = normalization_stats( complete_train, dim=3, predict_14=predict_14 )
+  data_mean, data_std, dim_to_ignore, dim_to_use = normalization_stats( complete_train, dim=3, predict_14=predict_14, birdNames= birdNames )
 
   # Divide every dimension independently
+  # todo : Change the entried for the dims_to_use and dime_to_ignore and also changes the size of the overall dataset
   train_set = normalize_data( train_set, data_mean, data_std, dim_to_use )
   test_set  = normalize_data( test_set,  data_mean, data_std, dim_to_use )
+
 
   return train_set, test_set, data_mean, data_std, dim_to_ignore, dim_to_use, train_root_positions, test_root_positions
 
 
-def postprocess_3d( poses_set ):
-  """Center 3d points around root
+def postprocess_3d( poses_set , birdNames = True):
+  """
+  Center 3d points around root
 
   Args
     poses_set: dictionary with 3d data
@@ -372,7 +444,10 @@ def postprocess_3d( poses_set ):
 
     # Remove the root from the 3d position
     poses = poses_set[k]
-    poses = poses - np.tile( poses[:,:3], [1, len(H36M_NAMES)] )
+    if birdNames:
+      poses = poses - np.tile(poses[:, :3], [1, len(BIRD_NAMES)])
+    else:
+      poses = poses - np.tile( poses[:,:3], [1, len(H36M_NAMES)] )
     poses_set[k] = poses
 
   return poses_set, root_positions

@@ -46,6 +46,9 @@ tf.app.flags.DEFINE_boolean("sample", False, "Set to True for sampling.")
 tf.app.flags.DEFINE_boolean("use_cpu", False, "Whether to use the CPU")
 tf.app.flags.DEFINE_integer("load", 0, "Try to load a previous checkpoint.")
 
+# Bird or no birds # HMN
+tf.app.flags.DEFINE_boolean("doBirds", False, "Set true for running on bird dataset.")
+
 # Misc
 tf.app.flags.DEFINE_boolean("use_fp16", False, "Train using fp16 instead of fp32.")
 
@@ -71,7 +74,7 @@ summaries_dir = os.path.join( train_dir, "log" ) # Directory for TB summaries
 # To avoid race conditions: https://github.com/tensorflow/tensorflow/issues/7448
 os.system('mkdir -p {}'.format(summaries_dir))
 
-def create_model( session, actions, batch_size ):
+def create_model( session, actions, batch_size, birdNames = False ):
   """
   Create model and initialize it or load its parameters in a session
 
@@ -96,6 +99,7 @@ def create_model( session, actions, batch_size ):
       FLAGS.learning_rate,
       summaries_dir,
       FLAGS.predict_14,
+      birdNames,
       dtype=tf.float16 if FLAGS.use_fp16 else tf.float32)
 
   if FLAGS.load <= 0:
@@ -131,20 +135,27 @@ def train():
   """Train a linear model for 3d pose estimation"""
 
   actions = data_utils.define_actions( FLAGS.action )
+  # todo : Refactured to 1 activity by HMN
+  actions = [actions[0]]
 
   number_of_actions = len( actions )
 
   # Load camera parameters
   SUBJECT_IDS = [1,5,6,7,8,9,11]
+  # todo : Refactured to 1 subject by HMN
+  SUBJECT_IDS = [1,9]
+  
+  
+  
   this_file = os.path.dirname(os.path.realpath(__file__))
   rcams = cameras.load_cameras(os.path.join(this_file, "..", FLAGS.cameras_path), SUBJECT_IDS)
-
+  doBirds = FLAGS.doBirds
   # Load 3d data and load (or create) 2d projections
   train_set_3d, test_set_3d, data_mean_3d, data_std_3d, dim_to_ignore_3d, dim_to_use_3d, train_root_positions, test_root_positions = data_utils.read_3d_data(
-    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14 )
+    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14, birdNames= doBirds )
 
   # Read groundtruth 2D projections
-  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams )
+  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams, birdNames= doBirds  )
   print( "done reading and normalizing data." )
 
   # Avoid using the GPU if requested
@@ -158,7 +169,7 @@ def train():
 
     # === Create the model ===
     print("Creating %d bi-layers of %d units." % (FLAGS.num_layers, FLAGS.linear_size))
-    model = create_model( sess, actions, FLAGS.batch_size )
+    model = create_model( sess, actions, FLAGS.batch_size, birdNames = doBirds  )
     model.train_writer.add_graph( sess.graph )
     print("Model created")
 
@@ -175,7 +186,7 @@ def train():
       current_epoch = current_epoch + 1
 
       # === Load training batches for one epoch ===
-      encoder_inputs, decoder_outputs = model.get_all_batches( train_set_2d, train_set_3d, FLAGS.camera_frame, training=True )
+      encoder_inputs, decoder_outputs = model.get_all_batches( train_set_2d, train_set_3d, FLAGS.camera_frame, training=True , birdNames= doBirds)
       nbatches = len( encoder_inputs )
       print("There are {0} train batches".format( nbatches ))
       start_time, loss = time.time(), 0.
@@ -243,12 +254,14 @@ def train():
       else:
 
         n_joints = 17 if not(FLAGS.predict_14) else 14
-        encoder_inputs, decoder_outputs = model.get_all_batches( test_set_2d, test_set_3d, FLAGS.camera_frame, training=False)
+        if doBirds:
+          n_joints = 7
+        encoder_inputs, decoder_outputs = model.get_all_batches( test_set_2d, test_set_3d, FLAGS.camera_frame, training=False, birdNames= doBirds)
 
         total_err, joint_err, step_time, loss = evaluate_batches( sess, model,
           data_mean_3d, data_std_3d, dim_to_use_3d, dim_to_ignore_3d,
           data_mean_2d, data_std_2d, dim_to_use_2d, dim_to_ignore_2d,
-          current_step, encoder_inputs, decoder_outputs, current_epoch )
+          current_step, encoder_inputs, decoder_outputs, current_epoch, birdNames= doBirds )
 
         print("=============================\n"
               "Step-time (ms):      %.4f\n"
@@ -295,7 +308,7 @@ def get_action_subset( poses_set, action ):
 def evaluate_batches( sess, model,
   data_mean_3d, data_std_3d, dim_to_use_3d, dim_to_ignore_3d,
   data_mean_2d, data_std_2d, dim_to_use_2d, dim_to_ignore_2d,
-  current_step, encoder_inputs, decoder_outputs, current_epoch=0 ):
+  current_step, encoder_inputs, decoder_outputs, current_epoch=0, birdNames = False ):
   """
   Generic method that evaluates performance of a list of batches.
   May be used to evaluate all actions or a single action.
@@ -322,13 +335,16 @@ def evaluate_batches( sess, model,
     loss: validation loss of the network
   """
 
-  n_joints = 17 if not(FLAGS.predict_14) else 14
+  if birdNames == False:
+    n_joints = 17 if not(FLAGS.predict_14) else 14
+  else:
+    n_joints = 7
   nbatches = len( encoder_inputs )
 
   # Loop through test examples
   all_dists, start_time, loss = [], time.time(), 0.
   log_every_n_batches = 100
-  for i in range(nbatches):
+  for i in range(nbatches):	
 
     if current_epoch > 0 and (i+1) % log_every_n_batches == 0:
       print("Working on test epoch {0}, batch {1} / {2}".format( current_epoch, i+1, nbatches) )
@@ -394,13 +410,18 @@ def sample():
   # Load camera parameters
   SUBJECT_IDS = [1,5,6,7,8,9,11]
   this_file = os.path.dirname(os.path.realpath(__file__))
+  SUBJECT_IDS = [1, 9]
+  doBirds = FLAGS.doBirds
+  if doBirds:
+    SUBJECT_IDS = [1, 9]
+
   rcams = cameras.load_cameras(os.path.join(this_file, "..", FLAGS.cameras_path), SUBJECT_IDS)
 
   # Load 3d data and load (or create) 2d projections
   train_set_3d, test_set_3d, data_mean_3d, data_std_3d, dim_to_ignore_3d, dim_to_use_3d, train_root_positions, test_root_positions = data_utils.read_3d_data(
-    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14 )
+    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14, birdNames= doBirds )
 
-  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams )
+  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams, birdNames= doBirds )
   print( "done reading and normalizing data." )
 
   device_count = {"GPU": 0} if FLAGS.use_cpu else {"GPU": 1}
@@ -408,17 +429,19 @@ def sample():
     # === Create the model ===
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.linear_size))
     batch_size = 128
-    model = create_model(sess, actions, batch_size)
+    model = create_model(sess, actions, batch_size, birdNames= doBirds)
     print("Model loaded")
 
     for key2d in test_set_2d.keys():
 
       (subj, b, fname) = key2d
       print( "Subject: {}, action: {}, fname: {}".format(subj, b, fname) )
-
-      # keys should be the same if 3d is in camera coordinates
-      key3d = key2d if FLAGS.camera_frame else (subj, b, '{0}.h5'.format(fname.split('.')[0]))
-      # key3d = (subj, b, fname[:-3]) if (fname.endswith('-sh')) and FLAGS.camera_frame else key3d
+      if doBirds == False:
+      	# keys should be the same if 3d is in camera coordinates
+      	key3d = key2d if FLAGS.camera_frame else (subj, b, '{0}.h5'.format(fname.split('.')[0]))
+      	# key3d = (subj, b, fname[:-3]) if (fname.endswith('-sh')) and FLAGS.camera_frame else key3d
+      else:
+        key3d = key2d
 
       enc_in  = test_set_2d[ key2d ]
       n2d, _ = enc_in.shape
@@ -476,17 +499,26 @@ def sample():
 
   # Grab a random batch to visualize
   enc_in, dec_out, poses3d = map( np.vstack, [enc_in, dec_out, poses3d] )
-  idx = np.random.permutation( enc_in.shape[0] )
-  enc_in, dec_out, poses3d = enc_in[idx, :], dec_out[idx, :], poses3d[idx, :]
+  # idx = np.random.permutation( enc_in.shape[0] )
+  # enc_in, dec_out, poses3d = enc_in[idx, :], dec_out[idx, :], poses3d[idx, :]
+
+  import pandas as pd
+  if doBirds:
+    imagePositions = pd.DataFrame(data=enc_in)
+    imagePositions.to_csv("Image2DPoints.csv",",",index= False)
+    predictedPositions = pd.DataFrame(data = poses3d)
+    predictedPositions.to_csv("Predicted3DPoints.csv", ",", index=False)
+    groundTruthPositions = pd.DataFrame(data=dec_out)
+    groundTruthPositions.to_csv("GT3DPoints.csv", ",", index=False)
 
   # Visualize random samples
   import matplotlib.gridspec as gridspec
 
   # 1080p	= 1,920 x 1,080
-  fig = plt.figure( figsize=(19.2, 10.8) )
+  fig = plt.figure( figsize=(192, 108) )# 19.2, 10.8) )
 
   gs1 = gridspec.GridSpec(5, 9) # 5 rows, 9 columns
-  gs1.update(wspace=-0.00, hspace=0.05) # set the spacing between axes.
+  gs1.update(wspace=-0.00, hspace=0.10) # 0.05 HMN set the spacing between axes.
   plt.axis('off')
 
   subplot_idx, exidx = 1, 1
@@ -496,21 +528,22 @@ def sample():
     # Plot 2d pose
     ax1 = plt.subplot(gs1[subplot_idx-1])
     p2d = enc_in[exidx,:]
-    viz.show2Dpose( p2d, ax1 )
+    viz.show2Dpose( p2d, ax1 , birdNames= doBirds)
     ax1.invert_yaxis()
 
     # Plot 3d gt
     ax2 = plt.subplot(gs1[subplot_idx], projection='3d')
     p3d = dec_out[exidx,:]
-    viz.show3Dpose( p3d, ax2 )
+    print("\n GT :")
+    viz.show3Dpose( p3d, ax2, birdNames= doBirds )
 
     # Plot 3d predictions
     ax3 = plt.subplot(gs1[subplot_idx+1], projection='3d')
     p3d = poses3d[exidx,:]
-    viz.show3Dpose( p3d, ax3, lcolor="#9b59b6", rcolor="#2ecc71" )
-
-    exidx = exidx + 1
-    subplot_idx = subplot_idx + 3
+    print("\n Predicted :")
+    viz.show3Dpose( p3d, ax3, lcolor="#9b59b6", rcolor="#2ecc71" , birdNames= doBirds)
+    # exidx = exidx + 1
+    # subplot_idx = subplot_idx + 3
 
   plt.show()
 
