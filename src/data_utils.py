@@ -8,6 +8,12 @@ import cdflib
 import numpy as np
 
 import cameras
+# import viz
+# import h5py
+# import glob
+# import copy
+import readDataset
+
 
 # Human3.6m IDs for training and testing
 TRAIN_SUBJECTS = [1,5,6,7,8]
