@@ -125,7 +125,7 @@ def load_data( bpath, subjects, actions, dim=3 ):
   return data
 
 
-def normalization_stats(complete_data, dim, predict_14=False ):
+def normalization_stats(complete_data, dim, predict_14=False ,  birdNames = False ):
   """Computes normalization statistics: mean and stdev, dimensions used and ignored
 
   Args
