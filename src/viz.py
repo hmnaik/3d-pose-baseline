@@ -7,7 +7,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import data_utils
 
 
-def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=False): # blue, orange
+
+def show3Dpose(channels, ax, lcolor="#3498db", rcolor="#e74c3c", add_labels=False, birdNames = False): # blue, orange
   """
   Visualize a 3d skeleton
 
