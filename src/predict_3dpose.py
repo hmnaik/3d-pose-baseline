@@ -236,7 +236,7 @@ def train():
           # Get 2d and 3d testing data for this action
           action_test_set_2d = get_action_subset( test_set_2d, action )
           action_test_set_3d = get_action_subset( test_set_3d, action )
-          encoder_inputs, decoder_outputs = model.get_all_batches( action_test_set_2d, action_test_set_3d, FLAGS.camera_frame, training=False)
+          encoder_inputs, decoder_outputs = model.get_all_batches( action_test_set_2d, action_test_set_3d, FLAGS.camera_frame, training=False, birdNames= doBirds)
 
           act_err, _, step_time, loss = evaluate_batches( sess, model,
             data_mean_3d, data_std_3d, dim_to_use_3d, dim_to_ignore_3d,
