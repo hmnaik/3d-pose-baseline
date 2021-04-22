@@ -409,7 +409,7 @@ def read_3d_data( actions, data_dir, camera_frame, rcams, predict_14=False , bir
 
   if birdNames:
     train_set, test_set = readDataset.getData("./testDatasetBirdTracking/*", dims= 3)
-
+    #train_set, test_set = readDataset.getData("./pigeonPostureUpdated/*", dims=3)
 
   if camera_frame:
     train_set = transform_world_to_camera( train_set, rcams )

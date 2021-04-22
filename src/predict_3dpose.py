@@ -144,18 +144,17 @@ def train():
   SUBJECT_IDS = [1,5,6,7,8,9,11]
   # todo : Refactured to 1 subject by HMN
   SUBJECT_IDS = [1,9]
-  
-  
+
   
   this_file = os.path.dirname(os.path.realpath(__file__))
   rcams = cameras.load_cameras(os.path.join(this_file, "..", FLAGS.cameras_path), SUBJECT_IDS)
   doBirds = FLAGS.doBirds
   # Load 3d data and load (or create) 2d projections
   train_set_3d, test_set_3d, data_mean_3d, data_std_3d, dim_to_ignore_3d, dim_to_use_3d, train_root_positions, test_root_positions = data_utils.read_3d_data(
-    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14, birdNames= doBirds )
+    actions, FLAGS.data_dir, FLAGS.camera_frame, rcams, FLAGS.predict_14, birdNames= doBirds)
 
   # Read groundtruth 2D projections
-  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams, birdNames= doBirds  )
+  train_set_2d, test_set_2d, data_mean_2d, data_std_2d, dim_to_ignore_2d, dim_to_use_2d = data_utils.create_2d_data( actions, FLAGS.data_dir, rcams, birdNames= doBirds)
   print( "done reading and normalizing data." )
 
   # Avoid using the GPU if requested
@@ -542,8 +541,10 @@ def sample():
     p3d = poses3d[exidx,:]
     print("\n Predicted :")
     viz.show3Dpose( p3d, ax3, lcolor="#9b59b6", rcolor="#2ecc71" , birdNames= doBirds)
-    # exidx = exidx + 1
-    # subplot_idx = subplot_idx + 3
+
+    # COmment to show only one result
+    exidx = exidx + 1
+    subplot_idx = subplot_idx + 3
 
   plt.show()
 

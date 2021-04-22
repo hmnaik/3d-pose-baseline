@@ -18,14 +18,14 @@ def getData(path, dims = 3):
         file = files[i]
         fileName = file.split(".csv")[0]
         frame = pd.read_hdf(fileName + ".h5", "{0}DPositions".format(dims))
-        frame = changeOrder(frame, dims)
-        dataDict[fileName] = frame.as_matrix()
+        # frame = changeOrder(frame, dims)
+        dataDict[fileName] = frame.to_numpy()
 
         print("{0}D position {1}: \n {2}".format(dims, frame.columns.tolist(), dataDict[fileName].shape))
 
     # if dims == 3:
     #     process3DData(dataDict)
-
+    # todo: Add validation set here for final inference : HMN
     for fileName,i in zip(dataDict,range(len(dataDict))):
         if i != len(dataDict)-1:
             trainDict[("1","Directions",fileName+ ".h5" )] = dataDict[fileName]
@@ -60,7 +60,7 @@ def changeOrder(frame, dims):
     print("New List : ", retFrame.iloc[0])
     return retFrame
 
-
+# Deprecated and not used
 def process3DData(dataDict, originCamID ="2118670", replaceCamID = "2119571"):
 
     # change the database
